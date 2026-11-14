@@ -1,9 +1,10 @@
 """App-side Postgres column encryption (backlog #11).
 
 Driver-agnostic: produce the DDL for a table, then call `seal_row` before INSERT/UPDATE and
-`open_row` after SELECT. Each encrypted column becomes `<col>_ct bytea` (a v2 envelope bound
-to tenant/table/row id/column) plus an optional `<col>_bi bytea` blind index for equality
-lookups. Postgres only ever sees ciphertext; keys stay in the app (zero-knowledge).
+`open_row` after SELECT. Each encrypted column becomes `<col>_ct bytea` (a version-3 envelope
+bound to tenant/table/row id/column; version 2 still opens) plus an optional `<col>_bi bytea`
+blind index for equality lookups. Postgres only ever sees ciphertext; keys stay in the app
+(zero-knowledge).
 """
 
 from __future__ import annotations
