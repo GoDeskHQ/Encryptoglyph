@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1100" height="720" viewBox="0 0 1100 720" role="img" aria-labelledby="title desc">
   <title id="title">Encryptoglyph architecture</title>
-  <desc id="desc">External Traefik on proxy-net routes to the MSP console and the API. OpenBao, Postgres, and the restic rest-server stay on an internal network with no host ports. The Rust crate, Python module, and TypeScript wrapper share one XChaCha20-Poly1305 envelope.</desc>
+  <desc id="desc">External Traefik on proxy-net routes to the MSP console and the API. OpenBao, Postgres, and the restic rest-server stay on an internal network with no host ports. The Rust crate, Python module, and Node.js package share one XChaCha20-Poly1305 envelope.</desc>
   <rect width="1100" height="720" fill="#f6f4ef"/>
   <text x="36" y="40" fill="#1c1917" font-family="system-ui, Segoe UI, sans-serif" font-size="22" font-weight="700">Encryptoglyph deployment</text>
   <text x="36" y="64" fill="#57534e" font-family="system-ui, Segoe UI, sans-serif" font-size="14">Compose skeleton in deploy/docker-compose.yml. Data services are not published on the host.</text>
@@ -67,6 +67,6 @@
   <text x="500" y="650" fill="#44403c" font-family="system-ui, Segoe UI, sans-serif" font-size="13">api/eg_crypto</text>
 
   <rect x="752" y="616" width="290" height="56" rx="10" fill="#ffffff" stroke="#1d4ed8"/>
-  <text x="772" y="650" fill="#1e3a8a" font-family="system-ui, Segoe UI, sans-serif" font-size="15" font-weight="700">TypeScript</text>
-  <text x="880" y="650" fill="#44403c" font-family="system-ui, Segoe UI, sans-serif" font-size="13">bindings/ts WASM</text>
+  <text x="772" y="650" fill="#1e3a8a" font-family="system-ui, Segoe UI, sans-serif" font-size="15" font-weight="700">Node.js</text>
+  <text x="860" y="650" fill="#44403c" font-family="system-ui, Segoe UI, sans-serif" font-size="13">sdk/js pure JS</text>
 </svg>

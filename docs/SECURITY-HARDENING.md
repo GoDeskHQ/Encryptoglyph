@@ -7,7 +7,7 @@ Bitwarden SDK, so it uses real **XChaCha20-Poly1305** (libsodium) instead of XAE
 ## Library shape
 Encryptoglyph is the single shared GoDesk crypto library (no separate SDK fork):
 - `crates/encryptoglyph` — Rust core (RustCrypto `chacha20poly1305`, `aes-gcm`, `hkdf`, `argon2`, `subtle`, `zeroize`; `#![forbid(unsafe_code)]`). Source of truth.
-- `wasm` feature + `bindings/ts` — WASM build and TypeScript wrapper for web vaults, extensions, desktop, and Node.
+- `sdk/js` and `bindings/ts` — Node.js >= 24 package `@godesk/encryptoglyph`. Pure JS over `node:crypto` (no wasm-pack). The Rust `wasm` feature still builds for wasm32; it is not what Node installs.
 - `api/eg_crypto` — Python implementation, wire-compatible (to become a PyO3 binding of the core).
 - `testvectors/envelope.json` — shared vectors. Rust and Python check them in this tree. Go and Node check them in their packages (see [ADOPTION.md](../ADOPTION.md)).
 - Komboe adoption plan: `docs/design/komboe-integration.md`.
@@ -35,7 +35,7 @@ Tests: `api/tests/test_crypto.py` (round-trip, nonce uniqueness, tamper every he
 3. **Post-quantum hybrid:** for key exchange/transport (agent enrolment, escrow bundles) use X25519 + ML-KEM-768 hybrid (FIPS 203) once a vetted library is available in our stacks (liboqs / OpenSSL 3.5+ / age PQ plugin). Symmetric XChaCha20-Poly1305 with 256-bit keys is already PQ-adequate.
 4. **Key commitment:** shipped as envelope v3 (see the table above). Do not add a second commitment. v2 and v1 stay readable until rewrap.
 5. **Memory hygiene:** the Rust core zeroises keys; replace the pure-Python path with a PyO3 binding of the core.
-6. **Bindings:** publish the WASM/TS package to the internal registry with a CI wasm-pack build + TS vector test; add UniFFI (mobile) and a Go binding if needed.
+6. **Bindings:** `@godesk/encryptoglyph` (`sdk/js`, Node >= 24) is the install path and checks `testvectors/envelope.json` locally. The Rust `wasm` feature still builds (`getrandom` `js`, and `getrandom` 0.4 `wasm_js` on wasm32). Go is `bindings/go`. UniFFI (mobile) is still open.
 7. **Ittia and other GoDesk projects:** adopt the v3 envelope. Paths and rewrap steps are in [ADOPTION.md](../ADOPTION.md).
 8. **Audit:** third-party crypto review of this design + the M6 pentest; fuzz `parse_header`; add CI dependency/license scan.
 9. **CI:** `.github/workflows/ci.yml` runs lint (ruff), pytest, compose config, gitleaks, the exposure probe, `rust-core` (`cargo test --locked`, clippy, `cargo deny`), license metadata, and the console e2e job. It does not run `cargo fmt` or a wasm-pack build. Node and Go vector tests are local until that workflow grows jobs for them. GitHub Actions budget failures are not product failures.

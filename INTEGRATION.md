@@ -13,7 +13,18 @@ blob = encrypt(kr, ctx, b"ada@example.com")
 assert decrypt(kr, ctx, blob) == b"ada@example.com"
 ```
 
-`api/eg_crypto` is the Python package. `crates/encryptoglyph` is the Rust source of truth. Both check `testvectors/envelope.json`.
+`api/eg_crypto` is the Python package. `crates/encryptoglyph` is the Rust source of truth. `@godesk/encryptoglyph` (`sdk/js`) is the Node.js 24 package. All three check `testvectors/envelope.json`.
+
+```js
+import { Keyring, encrypt, decrypt } from "@godesk/encryptoglyph";
+
+const kr = new Keyring(kid, key);
+const ctx = { tenant: "acme", purpose: "field", table: "customers", recordId: "42", field: "email" };
+const blob = encrypt(kr, ctx, "ada@example.com");
+if (Buffer.from(decrypt(kr, ctx, blob)).toString() !== "ada@example.com") throw new Error("round trip");
+```
+
+Install with `npm install ./sdk/js`, `npm install ./sdk/js/godesk-encryptoglyph-0.2.0.tgz`, or `npm install github:GoDeskio/Encryptoglyph#<ref>`. No `wasm-pack` step.
 
 ## Sidecar
 
