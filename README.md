@@ -215,3 +215,4 @@ Contributions are licensed under Apache-2.0. Read [CONTRIBUTING.md](CONTRIBUTING
 - [Contributing](CONTRIBUTING.md)
 - [Code of conduct](CODE_OF_CONDUCT.md)
 - [Product plan](docs/plan.md)
+- [Adoption across GoDesk](ADOPTION.md)
