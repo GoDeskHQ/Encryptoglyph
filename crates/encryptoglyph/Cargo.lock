@@ -292,6 +292,7 @@ dependencies = [
  "ed25519-dalek",
  "fpe",
  "getrandom 0.2.17",
+ "getrandom 0.4.3",
  "hkdf",
  "hmac",
  "ml-kem",
@@ -389,9 +390,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "300e883d756b2e4ec94e02791f39b04b522276138852cfc41d9fb7e904106099"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "r-efi",
  "rand_core 0.10.1",
+ "wasm-bindgen",
 ]
 
 [[package]]
