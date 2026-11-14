@@ -1,0 +1,38 @@
+{
+  "name": "@godesk/encryptoglyph",
+  "version": "0.2.0",
+  "description": "Encryptoglyph envelope encryption for Node.js. XChaCha20-Poly1305, HKDF-SHA256, and Argon2id, with no wasm-pack step.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "main": "./sdk/js/index.js",
+  "types": "./sdk/js/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./sdk/js/index.d.ts",
+      "import": "./sdk/js/index.js"
+    },
+    "./client": {
+      "import": "./sdk/js/encryptoglyph.js",
+      "default": "./sdk/js/encryptoglyph.js"
+    }
+  },
+  "files": [
+    "sdk/js/index.js",
+    "sdk/js/index.d.ts",
+    "sdk/js/envelope.js",
+    "sdk/js/encryptoglyph.js",
+    "sdk/js/README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "test": "node --test sdk/js/test/vectors.test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GoDeskio/Encryptoglyph.git"
+  }
+}

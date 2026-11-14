@@ -1,14 +1,37 @@
 {
   "name": "@godesk/encryptoglyph",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.2.0",
+  "description": "TypeScript entry for the Encryptoglyph Node.js envelope. Same bytes as sdk/js/envelope.js. No wasm-pack step.",
   "license": "Apache-2.0",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "engines": {
+    "node": ">=24"
+  },
+  "main": "./js/envelope.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./js/envelope.js"
+    }
+  },
+  "files": [
+    "js/envelope.js",
+    "index.d.ts",
+    "src/index.ts",
+    "README.md",
+    "vector-test.cjs"
+  ],
   "scripts": {
     "build:wasm": "wasm-pack build ../../crates/encryptoglyph --target bundler --out-dir ../../bindings/ts/pkg -- --features wasm",
     "build:wasm:node": "wasm-pack build ../../crates/encryptoglyph --target nodejs --out-dir ../../bindings/ts/pkg-node -- --features wasm",
-    "build": "tsc -p ."
+    "build": "tsc -p .",
+    "test": "node --test vector-test.mjs",
+    "typecheck": "tsc -p . --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GoDeskio/Encryptoglyph.git",
+    "directory": "bindings/ts"
   }
 }

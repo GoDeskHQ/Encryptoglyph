@@ -22,7 +22,7 @@ Encryptoglyph is an open-source encryption-at-rest library and self-hosted servi
 | --- | --- |
 | Rust envelope, HKDF, Argon2id, key rotation | Implemented and tested |
 | Python module, wire-compatible with Rust | Implemented and tested |
-| TypeScript wrapper over the WASM build | Source in `bindings/ts`; `wasm-pack` output is not committed |
+| Node.js package `@godesk/encryptoglyph` | `sdk/js` and `bindings/ts`. Pure JS, Node >= 24, no `wasm-pack` step |
 | `eg-api` container | `/healthz`, the `/v1` sidecar, and the console. Swagger, ReDoc, and `/openapi.json` are not served |
 | OpenBao, Postgres 16, restic rest-server | Images and config in `deploy/docker-compose.yml`. The console reports them as not connected |
 | Console | `console/`, served by the API. See [INTEGRATION.md](INTEGRATION.md) |
@@ -47,7 +47,7 @@ flowchart TB
   subgraph crypto [shared XChaCha20-Poly1305 envelope]
     rust[Rust crate]
     python[Python eg_crypto]
-    ts[TypeScript WASM]
+    ts[Node.js envelope]
   end
   operator --> traefik
   traefik --> console
@@ -62,7 +62,7 @@ flowchart TB
 
 The lines from `eg-api` to OpenBao, Postgres, and rest-server are placement in the compose file, not live calls from the health handler.
 
-![Architecture diagram: Traefik on proxy-net in front of the MSP console and API; OpenBao, Postgres, and restic rest-server on an internal network; Rust, Python, and TypeScript sharing one envelope](docs/img/architecture.svg)
+![Architecture diagram: Traefik on proxy-net in front of the MSP console and API; OpenBao, Postgres, and restic rest-server on an internal network; Rust, Python, and Node.js sharing one envelope](docs/img/architecture.svg)
 
 The SVG is the same layout: [docs/img/architecture.svg](docs/img/architecture.svg).
 
@@ -189,37 +189,51 @@ python -m pip install -r requirements-dev.txt
 pytest
 ```
 
-### TypeScript
+### Node.js
 
-`bindings/ts` is a thin wrapper around the WASM build of the Rust crate. Crypto stays in Rust. Build the package with wasm-pack, then compile the wrapper:
+`@godesk/encryptoglyph` is plain ECMAScript in `sdk/js` (and the same envelope file in `bindings/ts`). It runs on Node.js 24 or newer and does not run `wasm-pack`. XChaCha20-Poly1305 uses HChaCha20 plus Node's ChaCha20-Poly1305. HKDF-SHA256 and Argon2id use `node:crypto`. The package decrypts `testvectors/envelope.json`.
+
+From a checkout:
+
+```bash
+npm install ./sdk/js
+node --test sdk/js/test/vectors.test.js
+```
+
+The Rust `wasm` feature still builds for `wasm32-unknown-unknown`. `fpe` and `blahaj` stay in the crate's main dependency table, and the wasm32 graph enables `getrandom` `js` plus `getrandom` 0.4 `wasm_js`. `bindings/ts` can still pack that feature when a browser build is needed:
 
 ```bash
 cd bindings/ts
 npm run build:wasm
-npm run build
-# Node services use the CommonJS package instead of the bundler target:
 npm run build:wasm:node
 node vector-test.cjs pkg-node
 ```
 
-```ts
-import { Keyring } from "@godesk/encryptoglyph";
+Git installs use the repository root `package.json`, which points at the same files:
+
+```bash
+npm install github:GoDeskio/Encryptoglyph#<ref>
+```
+
+A packed tarball is `sdk/js/godesk-encryptoglyph-0.2.0.tgz`.
+
+```js
+import { Keyring, encrypt, decrypt } from "@godesk/encryptoglyph";
 
 const key = crypto.getRandomValues(new Uint8Array(32));
 const kr = new Keyring("k1", key);
-const blob = kr.encrypt(
-  { tenant: "acme", purpose: "field", table: "customers", recordId: "42", field: "email" },
-  new TextEncoder().encode("ada@example.com"),
-);
+const ctx = { tenant: "acme", purpose: "field", table: "customers", recordId: "42", field: "email" };
+const blob = encrypt(kr, ctx, "ada@example.com");
+const plain = decrypt(kr, ctx, blob);
 ```
 
-The package is `private` and is not published to npm from this repository. `bindings/ts/pkg` is gitignored.
+The browser sidecar client remains `sdk/js/encryptoglyph.js`. It calls `/v1` and does not seal locally. The envelope module is for Node, where `node:crypto` provides the primitives.
 
 ## Security model
 
 - **Authenticated encryption.** Version 2 is XChaCha20-Poly1305-IETF. The header (magic, version, algorithm, key id, nonce) is part of the additional data, together with the canonical record context. Flipping the version or moving the blob between records fails authentication.
 - **Key separation.** A root key never encrypts plaintext directly. HKDF-SHA256 derives a data key from the root key, the purpose, the tenant, and the algorithm. Password root keys use Argon2id with a 16-byte salt.
-- **Rotation.** A `Keyring` encrypts with the current key id and can decrypt older ids. `rewrap` writes a fresh version-2 blob. The current key cannot be retired.
+- **Rotation.** A `Keyring` encrypts with the current key id and can decrypt older ids. `rewrap` writes a fresh version-3 blob. The current key cannot be retired.
 - **Uniform failures.** Decrypt errors do not distinguish a bad tag from a malformed header.
 - **No backdoor in the library.** There is no escrow or override key in the Rust or Python code. Custody of root keys is an OpenBao operation. This console keeps session keys in process memory and says so.
 - **Network.** Compose does not publish host ports. OpenBao's own UI is disabled. Postgres passwords come from the gitignored env file.
