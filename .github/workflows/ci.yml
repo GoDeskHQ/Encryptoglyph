@@ -8,17 +8,49 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     name: lint
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, godesk]
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      # actions/setup-python has no Debian 13 builds. Install CPython 3.12
+      # with uv into a venv (uv-managed interpreters reject ensurepip/pip).
+      - name: Set up Python 3.12
+        env:
+          PYTHON_VERSION: "3.12"
+        run: |
+          set -euo pipefail
+          export PATH="/usr/local/bin:$HOME/.local/bin:$PATH"
+          echo "/usr/local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          if ! command -v uv >/dev/null 2>&1; then
+            curl -LsSf https://astral.sh/uv/install.sh | sh
+            export PATH="$HOME/.local/bin:$PATH"
+          fi
+          # Prefer CPython preinstalled on gh-runner-g5
+          # (/usr/local/bin/python3.11 and python3.12). Fall back to uv.
+          PY=""
+          if [ -x "/usr/local/bin/python${PYTHON_VERSION}" ]; then
+            PY="/usr/local/bin/python${PYTHON_VERSION}"
+          elif command -v "python${PYTHON_VERSION}" >/dev/null 2>&1; then
+            PY="$(command -v "python${PYTHON_VERSION}")"
+          else
+            uv python install "$PYTHON_VERSION"
+            PY="$(uv python find "$PYTHON_VERSION")"
+          fi
+          VENV="$RUNNER_TEMP/python"
+          # --seed installs pip/setuptools/wheel; uv venvs omit pip by default.
+          uv venv --seed --python "$PY" "$VENV"
+          echo "$VENV/bin" >> "$GITHUB_PATH"
+          "$VENV/bin/python" --version
+          "$VENV/bin/python" -m pip install --upgrade pip
 
       - name: Ruff
         run: |
@@ -27,14 +59,42 @@ jobs:
 
   pytest:
     name: pytest
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, godesk]
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      # actions/setup-python has no Debian 13 builds. Install CPython 3.12
+      # with uv into a venv (uv-managed interpreters reject ensurepip/pip).
+      - name: Set up Python 3.12
+        env:
+          PYTHON_VERSION: "3.12"
+        run: |
+          set -euo pipefail
+          export PATH="/usr/local/bin:$HOME/.local/bin:$PATH"
+          echo "/usr/local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          if ! command -v uv >/dev/null 2>&1; then
+            curl -LsSf https://astral.sh/uv/install.sh | sh
+            export PATH="$HOME/.local/bin:$PATH"
+          fi
+          # Prefer CPython preinstalled on gh-runner-g5
+          # (/usr/local/bin/python3.11 and python3.12). Fall back to uv.
+          PY=""
+          if [ -x "/usr/local/bin/python${PYTHON_VERSION}" ]; then
+            PY="/usr/local/bin/python${PYTHON_VERSION}"
+          elif command -v "python${PYTHON_VERSION}" >/dev/null 2>&1; then
+            PY="$(command -v "python${PYTHON_VERSION}")"
+          else
+            uv python install "$PYTHON_VERSION"
+            PY="$(uv python find "$PYTHON_VERSION")"
+          fi
+          VENV="$RUNNER_TEMP/python"
+          # --seed installs pip/setuptools/wheel; uv venvs omit pip by default.
+          uv venv --seed --python "$PY" "$VENV"
+          echo "$VENV/bin" >> "$GITHUB_PATH"
+          "$VENV/bin/python" --version
+          "$VENV/bin/python" -m pip install --upgrade pip
 
       - name: Pytest
         working-directory: api
@@ -44,7 +104,7 @@ jobs:
 
   compose-config:
     name: compose-config
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, godesk]
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
@@ -56,7 +116,7 @@ jobs:
 
   gitleaks:
     name: gitleaks
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, godesk]
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
@@ -72,7 +132,7 @@ jobs:
 
   built-shell-assert:
     name: built-shell-assert
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, godesk]
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
@@ -82,7 +142,7 @@ jobs:
 
   rust-core:
     name: rust-core
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, godesk]
     timeout-minutes: 20
     defaults:
       run:
@@ -90,8 +150,45 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Toolchain
-        run: rustup toolchain install stable --profile minimal -c clippy && rustup default stable
+      - name: Isolate rustup and cargo homes
+        run: |
+          echo "RUSTUP_HOME=$RUNNER_TEMP/rustup" >> "$GITHUB_ENV"
+          echo "CARGO_HOME=$RUNNER_TEMP/cargo" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/cargo/bin" >> "$GITHUB_PATH"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      # actions/setup-python has no Debian 13 builds. Install CPython 3.12
+      # with uv into a venv (uv-managed interpreters reject ensurepip/pip).
+      - name: Set up Python 3.12
+        env:
+          PYTHON_VERSION: "3.12"
+        run: |
+          set -euo pipefail
+          export PATH="/usr/local/bin:$HOME/.local/bin:$PATH"
+          echo "/usr/local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          if ! command -v uv >/dev/null 2>&1; then
+            curl -LsSf https://astral.sh/uv/install.sh | sh
+            export PATH="$HOME/.local/bin:$PATH"
+          fi
+          # Prefer CPython preinstalled on gh-runner-g5
+          # (/usr/local/bin/python3.11 and python3.12). Fall back to uv.
+          PY=""
+          if [ -x "/usr/local/bin/python${PYTHON_VERSION}" ]; then
+            PY="/usr/local/bin/python${PYTHON_VERSION}"
+          elif command -v "python${PYTHON_VERSION}" >/dev/null 2>&1; then
+            PY="$(command -v "python${PYTHON_VERSION}")"
+          else
+            uv python install "$PYTHON_VERSION"
+            PY="$(uv python find "$PYTHON_VERSION")"
+          fi
+          VENV="$RUNNER_TEMP/python"
+          # --seed installs pip/setuptools/wheel; uv venvs omit pip by default.
+          uv venv --seed --python "$PY" "$VENV"
+          echo "$VENV/bin" >> "$GITHUB_PATH"
+          "$VENV/bin/python" --version
+          "$VENV/bin/python" -m pip install --upgrade pip
 
       - name: License fields and Cargo package metadata are Apache-2.0
         working-directory: .
@@ -113,28 +210,84 @@ jobs:
 
   license-metadata:
     name: license-metadata
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, godesk]
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      # actions/setup-python has no Debian 13 builds. Install CPython 3.12
+      # with uv into a venv (uv-managed interpreters reject ensurepip/pip).
+      - name: Set up Python 3.12
+        env:
+          PYTHON_VERSION: "3.12"
+        run: |
+          set -euo pipefail
+          export PATH="/usr/local/bin:$HOME/.local/bin:$PATH"
+          echo "/usr/local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          if ! command -v uv >/dev/null 2>&1; then
+            curl -LsSf https://astral.sh/uv/install.sh | sh
+            export PATH="$HOME/.local/bin:$PATH"
+          fi
+          # Prefer CPython preinstalled on gh-runner-g5
+          # (/usr/local/bin/python3.11 and python3.12). Fall back to uv.
+          PY=""
+          if [ -x "/usr/local/bin/python${PYTHON_VERSION}" ]; then
+            PY="/usr/local/bin/python${PYTHON_VERSION}"
+          elif command -v "python${PYTHON_VERSION}" >/dev/null 2>&1; then
+            PY="$(command -v "python${PYTHON_VERSION}")"
+          else
+            uv python install "$PYTHON_VERSION"
+            PY="$(uv python find "$PYTHON_VERSION")"
+          fi
+          VENV="$RUNNER_TEMP/python"
+          # --seed installs pip/setuptools/wheel; uv venvs omit pip by default.
+          uv venv --seed --python "$PY" "$VENV"
+          echo "$VENV/bin" >> "$GITHUB_PATH"
+          "$VENV/bin/python" --version
+          "$VENV/bin/python" -m pip install --upgrade pip
 
       - name: License fields are Apache-2.0
         run: python3 scripts/check-license-metadata.py
 
   e2e:
     name: e2e
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, godesk]
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      # actions/setup-python has no Debian 13 builds. Install CPython 3.12
+      # with uv into a venv (uv-managed interpreters reject ensurepip/pip).
+      - name: Set up Python 3.12
+        env:
+          PYTHON_VERSION: "3.12"
+        run: |
+          set -euo pipefail
+          export PATH="/usr/local/bin:$HOME/.local/bin:$PATH"
+          echo "/usr/local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          if ! command -v uv >/dev/null 2>&1; then
+            curl -LsSf https://astral.sh/uv/install.sh | sh
+            export PATH="$HOME/.local/bin:$PATH"
+          fi
+          # Prefer CPython preinstalled on gh-runner-g5
+          # (/usr/local/bin/python3.11 and python3.12). Fall back to uv.
+          PY=""
+          if [ -x "/usr/local/bin/python${PYTHON_VERSION}" ]; then
+            PY="/usr/local/bin/python${PYTHON_VERSION}"
+          elif command -v "python${PYTHON_VERSION}" >/dev/null 2>&1; then
+            PY="$(command -v "python${PYTHON_VERSION}")"
+          else
+            uv python install "$PYTHON_VERSION"
+            PY="$(uv python find "$PYTHON_VERSION")"
+          fi
+          VENV="$RUNNER_TEMP/python"
+          # --seed installs pip/setuptools/wheel; uv venvs omit pip by default.
+          uv venv --seed --python "$PY" "$VENV"
+          echo "$VENV/bin" >> "$GITHUB_PATH"
+          "$VENV/bin/python" --version
+          "$VENV/bin/python" -m pip install --upgrade pip
 
       - uses: actions/setup-node@v4
         with:
@@ -146,7 +299,27 @@ jobs:
 
       - name: Playwright
         working-directory: e2e
-        run: npm install && npx playwright install --with-deps chromium
+        run: |
+          set -euo pipefail
+          npm install
+          # Debian 13 is not in Playwright's official dependency matrix.
+          # --with-deps falls back to Ubuntu 20.04 packages and fails.
+          # Passwordless sudo on these runners covers apt only.
+          sudo apt-get update
+          pkgs=(
+            libnss3 libnspr4 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1
+            libxfixes3 libxrandr2 libgbm1 libpango-1.0-0 libcairo2
+            libx11-6 libx11-xcb1 libxcb1 libxext6 libxshmfence1 ca-certificates
+          )
+          for base in libatk1.0-0 libatk-bridge2.0-0 libcups2 libasound2 libatspi2.0-0 libgtk-3-0; do
+            if apt-cache show "${base}t64" >/dev/null 2>&1; then
+              pkgs+=("${base}t64")
+            else
+              pkgs+=("$base")
+            fi
+          done
+          sudo apt-get install -y --no-install-recommends "${pkgs[@]}"
+          npx playwright install chromium
 
       - name: Console flows
         working-directory: e2e
