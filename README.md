@@ -11,7 +11,7 @@ Encryptoglyph is an open-source encryption-at-rest library and self-hosted servi
 
 ## Features
 
-- **XChaCha20-Poly1305 AEAD.** New ciphertext uses a 192-bit nonce and a 256-bit key. The header carries a version, an algorithm id, and a key id. Legacy AES-256-GCM envelopes still decrypt, and `rewrap` upgrades them. Rust (`crates/encryptoglyph`) and Python (`api/eg_crypto`) share the wire format and the vectors in `testvectors/envelope.json`.
+- **XChaCha20-Poly1305 AEAD.** New ciphertext uses a 192-bit nonce and a 256-bit key. The header carries a version, an algorithm id, and a key id. Legacy AES-256-GCM envelopes still decrypt, and `rewrap` upgrades them. Rust (`crates/encryptoglyph`), Python (`api/eg_crypto`), and Go (`bindings/go`) share the wire format and the vectors in `testvectors/envelope.json`.
 - **Key custody.** The compose file runs OpenBao on an internal network for Transit keys and KV. The library itself has no escrow key and no master override. Root keys are 32 bytes, derived with HKDF-SHA256 per tenant, purpose, and algorithm, or from a password with Argon2id. The console and `/v1` sidecar do not call OpenBao. The custody design is in [docs/plan.md](docs/plan.md) and [docs/SECURITY-HARDENING.md](docs/SECURITY-HARDENING.md).
 - **Encrypted backup.** `restic/rest-server` sits on the same internal network as the backup target. Host ports are not published. Backup scheduling and restore evidence are described in the plan and are not implemented in this tree.
 - **Console.** `console/` is the operator UI, served by the API at `/`. It seals fields, rotates and shreds keys, and runs a deterministic assistant. OpenBao and restic stay unwired until a deployment supplies them. The compose service builds the same image as the API.
@@ -136,6 +136,29 @@ fn seal_email() -> Result<Vec<u8>, encryptoglyph::Error> {
 cd crates/encryptoglyph
 cargo test --locked
 ```
+
+### Go
+
+`bindings/go` matches the Rust wire format using `golang.org/x/crypto` (XChaCha20-Poly1305, HKDF-SHA256, Argon2id). `Encrypt` writes version 3. `Decrypt` still opens version 2 and legacy AES-256-GCM version 1. `Rewrap` writes a fresh version-3 blob.
+
+```bash
+cd bindings/go
+go test -count=1
+```
+
+```go
+import "github.com/GoDeskio/Encryptoglyph/bindings/go"
+
+kr, err := encryptoglyph.NewKeyring("k1", key)
+ctx := encryptoglyph.RecordContext{
+    Tenant: "acme", Purpose: "field", Table: "customers",
+    RecordID: "42", Field: "email", SchemaVersion: 1,
+}
+blob, err := encryptoglyph.Encrypt(kr, ctx, []byte("ada@example.com"))
+plain, err := encryptoglyph.Decrypt(kr, ctx, blob, encryptoglyph.VersionLegacy)
+```
+
+Module path: `github.com/GoDeskio/Encryptoglyph/bindings/go`.
 
 ### Python
 

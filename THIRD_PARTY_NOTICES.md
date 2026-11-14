@@ -39,6 +39,13 @@ Encryptoglyph runs the following third-party software unmodified. Attribute them
 - License: MIT
 - Source: https://git.distrust.co/public/blahaj
 
+## golang.org/x/crypto
+
+- Project: Go cryptography packages
+- Use: Go envelope (`bindings/go`) for XChaCha20-Poly1305, HKDF-SHA256, and Argon2id
+- License: BSD 3-Clause License
+- Source: https://cs.opensource.google/go/x/crypto
+
 ## FastAPI
 
 - Project: FastAPI
