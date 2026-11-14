@@ -173,6 +173,9 @@ pytest
 cd bindings/ts
 npm run build:wasm
 npm run build
+# Node services use the CommonJS package instead of the bundler target:
+npm run build:wasm:node
+node vector-test.cjs pkg-node
 ```
 
 ```ts

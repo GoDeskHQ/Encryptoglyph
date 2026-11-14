@@ -29,5 +29,11 @@ subtle = "2.6"
 zeroize = { version = "1.8", features = ["derive"] }
 getrandom = "0.2"
 wasm-bindgen = { version = "0.2", optional = true }
+
+# rand_core 0.10 pulls getrandom 0.4, which has no `js` feature. Enabling
+# `wasm_js` on that version lets the wasm32 build use the locked graph.
+# The direct 0.2 dependency stays named `getrandom` for getrandom::getrandom.
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+getrandom04 = { package = "getrandom", version = "0.4", features = ["wasm_js"] }
 fpe = "0.6.1"
 blahaj = "0.7"
