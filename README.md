@@ -162,7 +162,7 @@ Module path: `github.com/GoDeskio/Encryptoglyph/bindings/go`.
 
 ### Python
 
-`api/eg_crypto` matches the Rust wire format. Tests run it directly. The API container image does not copy this package.
+`api/eg_crypto` matches the Rust wire format. Tests run it directly. `pip install` of the `api` directory installs that package on its own (project name `eg-crypto`). FastAPI and uvicorn stay optional extras and in `requirements.txt`, which is what the API image installs. The image copies `eg_crypto` into the container.
 
 From the `api` directory:
 
@@ -184,6 +184,7 @@ assert decrypt(kr, ctx, blob) == b"ada@example.com"
 
 ```bash
 cd api
+python -m pip install .
 python -m pip install -r requirements-dev.txt
 pytest
 ```
