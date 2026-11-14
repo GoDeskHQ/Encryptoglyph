@@ -7,10 +7,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
 jobs:
   version:
     name: tag matches VERSION
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, godesk]
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
