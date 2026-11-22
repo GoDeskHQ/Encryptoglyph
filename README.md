@@ -251,6 +251,7 @@ Contributions are licensed under Apache-2.0. Read [CONTRIBUTING.md](CONTRIBUTING
 
 ## Project links
 
+- [Public marketing site source and hosting notes](site/) — intended hostname: `encryptoglyph.godesk.io` (deployment pending).
 - [Komboe](https://komboe.com)
 - [Security policy](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)
