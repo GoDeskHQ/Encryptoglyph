@@ -28,6 +28,7 @@ from eg_crypto.reauth import ReauthGate, ReauthRequired
 
 from .agent import answer
 from .store import Store
+from .tokens import TokenStore, parse_scopes, parse_ttl
 from .updater import check_release, github_fetch, read_version
 
 _ID = re.compile(r"^[A-Za-z0-9._:-]{1,64}$")
@@ -122,6 +123,7 @@ def create_app() -> FastAPI:
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(_Headers)
     app.state.store = Store()
+    app.state.tokens = TokenStore()
     app.state.gate = ReauthGate(os.urandom(32))
     app.state.version = read_version(locate_version())
     console = locate_console()
@@ -188,9 +190,56 @@ def create_app() -> FastAPI:
             return None, None
         return token, session
 
+    def _auth(request: Request, scope: str):
+        """A console session, or a scoped API token bound to one."""
+        header = request.headers.get("authorization", "")
+        if header.lower().startswith("bearer "):
+            record = app.state.tokens.resolve(header[7:].strip())
+            if record is None or scope not in record.scopes:
+                return None, None
+            session = app.state.store.get(record.session_id)
+            if session is None:
+                return None, None
+            return record.session_id, session
+        return _session(request)
+
+    @app.post("/v1/tokens")
+    def create_token(request: Request, body: dict) -> JSONResponse:
+        token, session = _session(request)
+        if session is None or token is None:
+            return _fail(401, "session required")
+        scopes = parse_scopes(body.get("scopes"))
+        ttl = parse_ttl(body)
+        name = body.get("name", "")
+        if scopes is None or ttl is None or not isinstance(name, str):
+            return _fail(400, "invalid payload")
+        try:
+            plain, record = app.state.tokens.create(token, name, scopes, ttl)
+        except ValueError as exc:
+            return _fail(400, str(exc))
+        # Keys live with the session, so the session lives as long as its longest token.
+        session.expires = max(session.expires, record.expires)
+        return JSONResponse({**record.public(), "token": plain}, status_code=201)
+
+    @app.get("/v1/tokens")
+    def list_tokens(request: Request) -> JSONResponse:
+        token, session = _session(request)
+        if session is None or token is None:
+            return _fail(401, "session required")
+        return JSONResponse({"tokens": app.state.tokens.list(token)})
+
+    @app.delete("/v1/tokens/{token_id}")
+    def revoke_token(request: Request, token_id: str) -> JSONResponse:
+        token, session = _session(request)
+        if session is None or token is None:
+            return _fail(401, "session required")
+        if not app.state.tokens.revoke(token, token_id):
+            return _fail(404, "not found")
+        return JSONResponse({"revoked": token_id})
+
     @app.post("/v1/keys")
     def create_key(request: Request) -> JSONResponse:
-        _token, session = _session(request)
+        _token, session = _auth(request, "keys:write")
         if session is None:
             return _fail(401, "session required")
         try:
@@ -201,14 +250,14 @@ def create_app() -> FastAPI:
 
     @app.get("/v1/keys")
     def list_keys(request: Request) -> JSONResponse:
-        _token, session = _session(request)
+        _token, session = _auth(request, "keys:read")
         if session is None:
             return _fail(401, "session required")
         return JSONResponse({"keys": session.public_keys()})
 
     @app.post("/v1/seal")
     def seal(request: Request, body: dict) -> JSONResponse:
-        _token, session = _session(request)
+        _token, session = _auth(request, "seal")
         if session is None:
             return _fail(401, "session required")
         ctx = _context(body)
@@ -238,7 +287,7 @@ def create_app() -> FastAPI:
 
     @app.post("/v1/open")
     def open_blob(request: Request, body: dict) -> JSONResponse:
-        _token, session = _session(request)
+        _token, session = _auth(request, "open")
         if session is None:
             return _fail(401, "session required")
         ctx = _context(body)
@@ -257,7 +306,7 @@ def create_app() -> FastAPI:
 
     @app.post("/v1/rewrap")
     def rewrap_blob(request: Request, body: dict) -> JSONResponse:
-        _token, session = _session(request)
+        _token, session = _auth(request, "rewrap")
         if session is None:
             return _fail(401, "session required")
         ctx = _context(body)
@@ -280,7 +329,7 @@ def create_app() -> FastAPI:
 
     @app.post("/v1/blind-index")
     def blind(request: Request, body: dict) -> JSONResponse:
-        _token, session = _session(request)
+        _token, session = _auth(request, "blind-index")
         if session is None:
             return _fail(401, "session required")
         tenant = body.get("tenant", "")
@@ -307,7 +356,7 @@ def create_app() -> FastAPI:
 
     @app.post("/v1/backup")
     def backup(request: Request) -> JSONResponse:
-        _token, session = _session(request)
+        _token, session = _auth(request, "backup")
         if session is None:
             return _fail(401, "session required")
         if not session.current:

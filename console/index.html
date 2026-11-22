@@ -23,6 +23,7 @@
       <button type="button" data-nav="seal">Seal</button>
       <button type="button" data-nav="keys">Keys</button>
       <button type="button" data-nav="custody">Custody</button>
+      <button type="button" data-nav="tokens">Tokens</button>
       <button type="button" data-nav="agent">Agent</button>
       <button type="button" data-nav="adopt">Adopt</button>
     </nav>
@@ -155,6 +156,35 @@
       </form>
     </section>
 
+    <section data-view-panel="tokens" id="view-tokens" hidden>
+      <header class="section-head">
+        <h1>API tokens</h1>
+        <p>Give Konektor, n8n, or a script scoped access to this session's keys. The token is shown once. Only its hash is kept, in process memory. Tokens cannot shred keys or make other tokens.</p>
+      </header>
+      <form class="glass form" id="token-form">
+        <div class="split">
+          <label>Name <input id="token-name" data-testid="token-name" value="konektor" autocomplete="off" required maxlength="64"></label>
+          <label>Expires in days <input id="token-days" data-testid="token-days" type="number" min="1" max="30" value="7" required></label>
+        </div>
+        <fieldset class="row" id="token-scopes">
+          <legend>Scopes</legend>
+          <label><input type="checkbox" value="seal" checked> seal</label>
+          <label><input type="checkbox" value="open" checked> open</label>
+          <label><input type="checkbox" value="rewrap"> rewrap</label>
+          <label><input type="checkbox" value="blind-index"> blind-index</label>
+          <label><input type="checkbox" value="keys:read" checked> keys:read</label>
+          <label><input type="checkbox" value="keys:write"> keys:write</label>
+          <label><input type="checkbox" value="backup"> backup</label>
+        </fieldset>
+        <div class="row"><button class="btn primary" type="submit">Create token</button></div>
+        <p id="token-status" data-testid="token-status" role="status"></p>
+        <label>New token (copy it now)
+          <output id="token-once" data-testid="token-once"></output>
+        </label>
+      </form>
+      <div id="token-list" class="stack" data-testid="token-list"></div>
+    </section>
+
     <section data-view-panel="adopt" id="view-adopt" hidden>
       <header class="section-head">
         <h1>Adopt</h1>
@@ -176,5 +206,6 @@
     <span>Apache-2.0</span>
   </footer>
   <script src="/static/app.js"></script>
+  <script src="/static/tokens.js"></script>
 </body>
 </html>
