@@ -27,55 +27,81 @@ class Session:
     keys: dict[str, bytearray] = field(default_factory=dict)
     order: list[str] = field(default_factory=list)
     current: str | None = None
+    key_created: dict[str, float] = field(default_factory=dict)
+    key_retired: dict[str, float] = field(default_factory=dict)
+    key_lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
+    inventory: dict[str, dict[str, dict[str, str]]] = field(
+        default_factory=lambda: {kind: {} for kind in ("tenants", "sites", "devices")}
+    )
+    inventory_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def wipe(self) -> None:
-        for material in self.keys.values():
-            _wipe(material)
-        self.keys.clear()
-        self.order.clear()
-        self.current = None
+        with self.key_lock:
+            for material in self.keys.values():
+                _wipe(material)
+            self.keys.clear()
+            self.order.clear()
+            self.current = None
+            self.key_created.clear()
+            self.key_retired.clear()
+            with self.inventory_lock:
+                for records in self.inventory.values():
+                    records.clear()
 
     def keyring(self) -> Keyring:
-        if not self.current or self.current not in self.keys:
-            raise LookupError("no key")
-        public = {kid: bytes(material) for kid, material in self.keys.items()}
-        return Keyring(public, self.current)
+        with self.key_lock:
+            if not self.current or self.current not in self.keys:
+                raise LookupError("no key")
+            public = {kid: bytes(material) for kid, material in self.keys.items()}
+            return Keyring(public, self.current)
 
     def add_key(self) -> tuple[str, str]:
-        if len(self.keys) >= MAX_KEYS:
-            raise ValueError("too many keys")
-        number = 1
-        while f"k{number}" in self.keys:
-            number += 1
-        kid = f"k{number}"
-        material = bytearray(secrets.token_bytes(32))
-        self.keys[kid] = material
-        self.order.append(kid)
-        self.current = kid
-        return kid, fingerprint(bytes(material))
+        with self.key_lock:
+            if len(self.keys) >= MAX_KEYS:
+                raise ValueError("too many keys")
+            number = 1
+            while f"k{number}" in self.keys:
+                number += 1
+            kid = f"k{number}"
+            material = bytearray(secrets.token_bytes(32))
+            self.keys[kid] = material
+            self.order.append(kid)
+            now = time.time()
+            if self.current:
+                self.key_retired[self.current] = now
+            self.key_created[kid] = now
+            self.current = kid
+            return kid, fingerprint(bytes(material))
 
     def public_keys(self) -> list[dict[str, object]]:
-        rows = []
-        for kid in self.order:
-            material = self.keys.get(kid)
-            if material is None:
-                continue
-            rows.append(
-                {
-                    "kid": kid,
-                    "fingerprint": fingerprint(bytes(material)),
-                    "current": kid == self.current,
-                }
-            )
-        return rows
+        with self.key_lock:
+            rows = []
+            for kid in self.order:
+                material = self.keys.get(kid)
+                if material is None:
+                    continue
+                rows.append(
+                    {
+                        "kid": kid,
+                        "fingerprint": fingerprint(bytes(material)),
+                        "current": kid == self.current,
+                        "rotation_status": "current" if kid == self.current else "retired",
+                        "created_unix": self.key_created[kid],
+                        "retired_unix": self.key_retired.get(kid),
+                    }
+                )
+            return rows
 
     def shred(self, kid: str) -> str:
-        if kid == self.current or kid not in self.keys:
-            raise ValueError("cannot shred")
-        fp = fingerprint(bytes(self.keys[kid]))
-        _wipe(self.keys.pop(kid))
-        self.order = [item for item in self.order if item != kid]
-        return fp
+        with self.key_lock:
+            if kid == self.current or kid not in self.keys:
+                raise ValueError("cannot shred")
+            fp = fingerprint(bytes(self.keys[kid]))
+            _wipe(self.keys.pop(kid))
+            self.order = [item for item in self.order if item != kid]
+            self.key_created.pop(kid, None)
+            self.key_retired.pop(kid, None)
+            return fp
 
 
 class Store:
