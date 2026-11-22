@@ -148,6 +148,9 @@ def create_app() -> FastAPI:
             "custody": "process-memory",
             "openbao": "not-connected",
             "restic": "not-configured",
+            "backup_health": "not-implemented",
+            "restore_tests": "not-implemented",
+            "escrow_approvals": "not-implemented",
             "agent": "deterministic",
             "ollama": bool(os.environ.get("OLLAMA_BASE_URL")),
         }
@@ -187,6 +190,67 @@ def create_app() -> FastAPI:
         if session is None:
             return None, None
         return token, session
+
+    # Metadata follows the existing session lifetime; this is not custody provisioning.
+    def inventory_routes(kind: str, parent: str | None, parent_kind: str | None) -> None:
+        fields = {"id", "name"} | ({parent} if parent else set())
+
+        def create_record(request: Request, body: dict) -> JSONResponse:
+            _token, session = _session(request)
+            if session is None:
+                return _fail(401, "session required")
+            if set(body) != fields:
+                return _fail(400, "invalid metadata fields")
+            record_id, name = body.get("id"), body.get("name")
+            if (
+                not isinstance(record_id, str) or not _ID.fullmatch(record_id)
+                or record_id in {".", ".."}
+                or not isinstance(name, str) or not 1 <= len(name.strip()) <= 120
+                or any(ord(char) < 32 or 127 <= ord(char) <= 159 for char in name)
+            ):
+                return _fail(400, "invalid metadata")
+            record = {"id": record_id, "name": name.strip()}
+            if parent:
+                value = body.get(parent)
+                if not isinstance(value, str) or not _ID.fullmatch(value):
+                    return _fail(400, "invalid parent")
+                record[parent] = value
+            with session.inventory_lock:
+                records = session.inventory[kind]
+                if parent and record[parent] not in session.inventory[parent_kind]:
+                    return _fail(404, "parent not found")
+                if record_id in records:
+                    return _fail(409, "metadata id already exists")
+                if len(records) >= 1000:
+                    return _fail(400, "metadata limit reached")
+                records[record_id] = record
+            return JSONResponse(record, status_code=201)
+
+        def list_records(request: Request) -> JSONResponse:
+            _token, session = _session(request)
+            if session is None:
+                return _fail(401, "session required")
+            with session.inventory_lock:
+                rows = list(session.inventory[kind].values())
+            return JSONResponse({kind: rows})
+
+        def show_record(record_id: str, request: Request) -> JSONResponse:
+            _token, session = _session(request)
+            if session is None:
+                return _fail(401, "session required")
+            with session.inventory_lock:
+                record = session.inventory[kind].get(record_id)
+            if record is None:
+                return _fail(404, "metadata not found")
+            return JSONResponse(record)
+
+        app.add_api_route(f"/v1/{kind}", create_record, methods=["POST"])
+        app.add_api_route(f"/v1/{kind}", list_records, methods=["GET"])
+        app.add_api_route(f"/v1/{kind}/{{record_id}}", show_record, methods=["GET"])
+
+    inventory_routes("tenants", None, None)
+    inventory_routes("sites", "tenant_id", "tenants")
+    inventory_routes("devices", "site_id", "sites")
 
     @app.post("/v1/keys")
     def create_key(request: Request) -> JSONResponse:

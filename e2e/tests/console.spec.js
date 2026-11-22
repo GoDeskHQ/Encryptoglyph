@@ -41,6 +41,9 @@ test("console flows seal, navigate, and refuse secrets", async ({ page }) => {
   await expect(page.getByTestId("seal-status")).toContainText("Rewrap");
   await page.getByRole("button", { name: "Keys", exact: true }).click();
   const retired = page.locator(".key", { has: page.getByRole("button", { name: "Shred" }) });
+  await expect(retired).toContainText("retired");
+  await expect(retired).toContainText("retained for opening and rewrap");
+  await expect(page.locator(".key").filter({ hasText: "current" })).toContainText("No scheduled rotation policy");
   const fingerprint = await retired.locator("code").innerText();
   await page.getByTestId("shred-confirm").fill(fingerprint);
   await retired.getByRole("button", { name: "Shred" }).click();
@@ -48,6 +51,10 @@ test("console flows seal, navigate, and refuse secrets", async ({ page }) => {
 
   await page.getByRole("button", { name: "Custody", exact: true }).click();
   await expect(page.getByTestId("custody-status")).toContainText("not-connected");
+  await expect(page.getByTestId("custody-status")).toContainText("Backup health");
+  await expect(page.getByTestId("custody-status")).toContainText("Restore tests");
+  await expect(page.getByTestId("custody-status")).toContainText("Escrow two-person approvals");
+  await expect(page.getByTestId("custody-status")).toContainText("not-implemented");
   await page.getByRole("button", { name: "Download sealed inventory" }).click();
   await expect(page.getByTestId("backup-status")).toContainText("Sealed inventory");
 
@@ -85,6 +92,52 @@ test("mobile nav and reduced motion", async ({ page }) => {
   await page.locator("#seal-form").getByRole("button", { name: "Seal", exact: true }).click();
   await expect(page.getByTestId("seal-status")).toContainText("Sealed");
   await page.getByRole("button", { name: "Menu" }).click();
+  await page.locator("#nav-links").getByRole("button", { name: "Inventory", exact: true }).click();
+  await expect(page.locator("#view-inventory")).toBeVisible();
+  await expect(page.locator("#tenant-list")).toContainText("No tenant records");
+  await page.screenshot({ path: path.join(shots, "inventory-mobile-390.png"), fullPage: true });
+  await page.getByRole("button", { name: "Menu" }).click();
   await page.locator("#nav-links").getByRole("button", { name: "Overview", exact: true }).click();
   await page.screenshot({ path: path.join(shots, "mobile-390.png"), fullPage: true });
+});
+
+test("inventory creates and shows the tenant site device hierarchy", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Inventory", exact: true }).click();
+  await expect(page.locator("#view-inventory")).toContainText("disappear on restart");
+  await expect(page.locator("#tenant-list")).toContainText("No tenant records");
+  const create = async (kind, id, name) => {
+    await page.locator(`#inventory-${kind}-id`).fill(id);
+    await page.locator(`#inventory-${kind}-name`).fill(name);
+    await page.getByRole("button", { name: `Create ${kind}`, exact: true }).click();
+    await expect(page.locator("#inventory-status")).toHaveText(`Created ${kind} metadata ${id}.`);
+  };
+  await create("tenant", "acme", "Acme MSP");
+  await page.locator("#inventory-site-tenant").selectOption("acme");
+  await create("site", "phoenix", "Phoenix office");
+  await page.locator("#inventory-device-site").selectOption("phoenix");
+  await create("device", "host-1", "Local host");
+  await expect(page.locator("#inventory-detail")).toContainText("phoenix");
+  await page.locator("#tenant-list").getByRole("button", { name: "Acme MSP (acme)" }).click();
+  await expect(page.locator("#inventory-detail")).toContainText("Acme MSP");
+  await page.locator("#site-list").getByRole("button", { name: "Phoenix office (phoenix)" }).click();
+  await expect(page.locator("#inventory-detail")).toContainText("tenant_id");
+  await expect(page.locator("#inventory-detail")).toContainText("acme");
+  await page.screenshot({ path: path.join(shots, "inventory-desktop.png"), fullPage: true });
+
+  await page.reload();
+  await page.getByRole("button", { name: "Inventory", exact: true }).click();
+  await expect(page.locator("#device-list")).toContainText("Local host (host-1)");
+  await page.locator("#inventory-tenant-id").fill("acme");
+  await page.locator("#inventory-tenant-name").fill("Duplicate");
+  await page.getByRole("button", { name: "Create tenant", exact: true }).click();
+  await expect(page.locator("#inventory-status")).not.toHaveText("");
+  await expect(page.locator("#tenant-list button")).toHaveCount(1);
+  await page.evaluate(() => sessionStorage.setItem("eg.session", "expired-test-session"));
+  await page.reload();
+  await page.getByRole("button", { name: "Inventory", exact: true }).click();
+  await expect(page.locator("#tenant-list")).toContainText("No tenant records");
+  await expect(page.locator("#site-list")).toContainText("No site records");
+  await expect(page.locator("#device-list")).toContainText("No device records");
+  await expect(page.locator("#inventory-detail")).toContainText("Select a record");
 });

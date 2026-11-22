@@ -22,6 +22,7 @@
       <button type="button" data-nav="home" aria-current="page">Overview</button>
       <button type="button" data-nav="seal">Seal</button>
       <button type="button" data-nav="keys">Keys</button>
+      <button type="button" data-nav="inventory">Inventory</button>
       <button type="button" data-nav="custody">Custody</button>
       <button type="button" data-nav="agent">Agent</button>
       <button type="button" data-nav="adopt">Adopt</button>
@@ -119,6 +120,43 @@
         <label>Fingerprint <input id="shred-confirm" data-testid="shred-confirm" autocomplete="off" spellcheck="false"></label>
         <p id="key-status" data-testid="key-status" role="status"></p>
       </form>
+    </section>
+
+    <section data-view-panel="inventory" id="view-inventory" hidden>
+      <header class="section-head">
+        <h1>Inventory</h1>
+        <p>Tenant → site → device metadata for this session. Records expire with the session and disappear on restart. This does not provision custody, enrol devices, or connect OpenBao.</p>
+      </header>
+      <div class="grid">
+        <form class="glass form" id="tenant-form">
+          <h2>Tenants</h2>
+          <label>Tenant ID <input id="inventory-tenant-id" maxlength="64" pattern="[A-Za-z0-9._:\-]+" required autocomplete="off"></label>
+          <label>Tenant name <input id="inventory-tenant-name" maxlength="120" required autocomplete="off"></label>
+          <button class="btn primary" type="submit">Create tenant</button>
+          <div class="stack" id="tenant-list"></div>
+        </form>
+        <form class="glass form" id="site-form">
+          <h2>Sites</h2>
+          <label>Parent tenant <select id="inventory-site-tenant" required></select></label>
+          <label>Site ID <input id="inventory-site-id" maxlength="64" pattern="[A-Za-z0-9._:\-]+" required autocomplete="off"></label>
+          <label>Site name <input id="inventory-site-name" maxlength="120" required autocomplete="off"></label>
+          <button class="btn primary" type="submit">Create site</button>
+          <div class="stack" id="site-list"></div>
+        </form>
+        <form class="glass form" id="device-form">
+          <h2>Devices</h2>
+          <label>Parent site <select id="inventory-device-site" required></select></label>
+          <label>Device ID <input id="inventory-device-id" maxlength="64" pattern="[A-Za-z0-9._:\-]+" required autocomplete="off"></label>
+          <label>Device name <input id="inventory-device-name" maxlength="120" required autocomplete="off"></label>
+          <button class="btn primary" type="submit">Create device</button>
+          <div class="stack" id="device-list"></div>
+        </form>
+      </div>
+      <p id="inventory-status" role="status"></p>
+      <article class="glass" aria-live="polite">
+        <h2>Record details</h2>
+        <dl class="status" id="inventory-detail"><dt>Selection</dt><dd>Select a record to view its metadata.</dd></dl>
+      </article>
     </section>
 
     <section data-view-panel="custody" id="view-custody" hidden>

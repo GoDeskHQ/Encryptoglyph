@@ -75,6 +75,7 @@ function show(view) {
   $("nav-links").classList.remove("open");
   $("menu").setAttribute("aria-expanded", "false");
   if (view === "keys") refreshKeys();
+  if (view === "inventory") refreshInventory().catch(inventoryError);
   if (view === "custody") refreshCustody();
 }
 
@@ -107,10 +108,13 @@ async function refreshKeys() {
     card.className = "glass key";
     const text = document.createElement("div");
     const title = document.createElement("strong");
-    title.textContent = row.current ? `${row.kid} · current` : row.kid;
+    title.textContent = `${row.kid} · ${row.rotation_status}`;
     const code = document.createElement("code");
     code.textContent = row.fingerprint;
     text.append(title, document.createElement("br"), code);
+    const rotation = document.createElement("p");
+    rotation.textContent = `Created ${new Date(row.created_unix * 1000).toLocaleString()}. ${row.retired_unix === null ? "Current for new seals. No scheduled rotation policy." : `Retired ${new Date(row.retired_unix * 1000).toLocaleString()}; retained for opening and rewrap.`}`;
+    text.append(rotation);
     card.append(text);
     if (!row.current) {
       const button = document.createElement("button");
@@ -138,6 +142,105 @@ async function shred(kid) {
   }
 }
 
+function inventoryError(error) {
+  $("inventory-status").textContent = error.message;
+}
+
+function clearInventoryDetail() {
+  const term = document.createElement("dt");
+  term.textContent = "Selection";
+  const detail = document.createElement("dd");
+  detail.textContent = "Select a record to view its metadata.";
+  $("inventory-detail").replaceChildren(term, detail);
+}
+
+function inventoryOptions(id, rows) {
+  const select = $(id);
+  const selected = select.value;
+  select.replaceChildren();
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = rows.length ? "Choose a parent" : "Create a parent first";
+  select.append(placeholder);
+  rows.forEach((row) => {
+    const option = document.createElement("option");
+    option.value = row.id;
+    option.textContent = `${row.name} (${row.id})`;
+    select.append(option);
+  });
+  select.value = rows.some((row) => row.id === selected) ? selected : "";
+}
+
+async function showInventoryRecord(collection, id) {
+  const record = await api(`/v1/${collection}/${encodeURIComponent(id)}`);
+  const detail = $("inventory-detail");
+  detail.replaceChildren();
+  Object.entries(record).forEach(([name, value]) => {
+    const term = document.createElement("dt");
+    term.textContent = name;
+    const definition = document.createElement("dd");
+    definition.textContent = String(value);
+    detail.append(term, definition);
+  });
+}
+
+async function refreshInventory() {
+  clearInventoryDetail();
+  $("inventory-status").textContent = "Loading inventory…";
+  ["tenant", "site", "device"].forEach((kind) => $(`${kind}-list`).replaceChildren());
+  await ensureSession();
+  const tenants = await api("/v1/tenants");
+  const sites = await api("/v1/sites");
+  const devices = await api("/v1/devices");
+  inventoryOptions("inventory-site-tenant", tenants.tenants);
+  inventoryOptions("inventory-device-site", sites.sites);
+  [["tenant", tenants.tenants], ["site", sites.sites], ["device", devices.devices]].forEach(([kind, rows]) => {
+    const list = $(`${kind}-list`);
+    list.replaceChildren();
+    if (!rows.length) {
+      const empty = document.createElement("p");
+      empty.textContent = `No ${kind} records yet.`;
+      list.append(empty);
+    }
+    rows.forEach((row) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "btn";
+      button.textContent = `${row.name} (${row.id})`;
+      button.addEventListener("click", () => showInventoryRecord(`${kind}s`, row.id).catch(inventoryError));
+      list.append(button);
+    });
+  });
+  $("inventory-status").textContent = "Metadata only. No custody backend is connected.";
+}
+
+["tenant", "site", "device"].forEach((kind) => {
+  $(`${kind}-form`).addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const submit = event.currentTarget.querySelector('[type="submit"]');
+    submit.disabled = true;
+    try {
+      await ensureSession();
+      const body = {
+        id: $(`inventory-${kind}-id`).value.trim(),
+        name: $(`inventory-${kind}-name`).value.trim(),
+      };
+      if (kind === "site") body.tenant_id = $("inventory-site-tenant").value;
+      if (kind === "device") body.site_id = $("inventory-device-site").value;
+      await api(`/v1/${kind}s`, body);
+      $(`inventory-${kind}-id`).value = "";
+      $(`inventory-${kind}-name`).value = "";
+      await refreshInventory();
+      await showInventoryRecord(`${kind}s`, body.id);
+      $("inventory-status").textContent = `Created ${kind} metadata ${body.id}.`;
+    } catch (error) {
+      inventoryError(error);
+    } finally {
+      submit.disabled = false;
+    }
+  });
+});
+
 async function refreshCustody() {
   const data = await api("/v1/status");
   const list = $("custody-status");
@@ -146,6 +249,9 @@ async function refreshCustody() {
     ["Custody", data.custody],
     ["OpenBao", data.openbao],
     ["Backup target", data.restic],
+    ["Backup health", data.backup_health],
+    ["Restore tests", data.restore_tests],
+    ["Escrow two-person approvals", data.escrow_approvals],
     ["AEAD", data.aead],
     ["Agent", data.ollama ? "deterministic, Ollama available" : "deterministic"],
   ].forEach(([name, value]) => {
