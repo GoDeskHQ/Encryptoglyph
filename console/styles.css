@@ -143,7 +143,7 @@ h1 {
 .form { display: grid; gap: 0.8rem; margin-top: 1rem; }
 .split { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.7rem; }
 label { display: grid; gap: 0.35rem; color: var(--muted); font-size: 0.92rem; }
-input, textarea, output {
+input, textarea, output, select {
   width: 100%;
   border: 0;
   border-radius: 12px;
@@ -166,6 +166,10 @@ textarea { resize: vertical; }
 .status { display: grid; grid-template-columns: auto 1fr; gap: 0.45rem 1rem; }
 .status dt { color: var(--muted); }
 .status dd { margin: 0; }
+.status dd { overflow-wrap: anywhere; }
+#inventory-status { color: var(--muted); min-height: 1.4em; }
+#view-inventory .form { align-content: start; }
+#view-inventory .stack .btn { overflow-wrap: anywhere; text-align: left; }
 
 .transcript { min-height: 12rem; display: grid; gap: 0.6rem; align-content: start; margin: 1rem 0; }
 .bubble { margin: 0; padding: 0.7rem 0.85rem; border-radius: 14px; background: rgba(0, 0, 0, 0.2); }
